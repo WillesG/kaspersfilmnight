@@ -13,6 +13,19 @@ document.addEventListener("DOMContentLoaded", function() {
     setupCommentForm();
 });
 
+function extractComments(data) {
+    if (!data || typeof data !== "object") {
+        return [];
+    }
+    if (Array.isArray(data.comments)) {
+        return data.comments;
+    }
+    if (data.key === "value") {
+        return [];
+    }
+    return [];
+}
+
 function loadEventDetails() {
     var container = document.getElementById("movieShowcase");
     
@@ -92,10 +105,13 @@ function loadComments() {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var comments = data.comments || [];
+        var comments = extractComments(data);
         
         if (comments.length === 0) {
             container.innerHTML = "<div class=\"no-comments\">💬 Nog geen reacties. Wees de eerste!</div>";
@@ -161,10 +177,13 @@ function setupCommentForm() {
             }
         })
         .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Fetch failed");
+            }
             return response.json();
         })
         .then(function(data) {
-            var comments = data.comments || [];
+            var comments = extractComments(data);
             
             comments.push({
                 name: name,

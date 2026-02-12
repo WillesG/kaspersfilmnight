@@ -30,6 +30,19 @@ function saveUserVotesLocal(votes) {
     } catch (e) {}
 }
 
+function extractVotes(data) {
+    if (!data || typeof data !== "object") {
+        return {};
+    }
+    if (data.votes && typeof data.votes === "object") {
+        return data.votes;
+    }
+    if (data.key === "value") {
+        return {};
+    }
+    return {};
+}
+
 function loadWishlist() {
     var container = document.getElementById("wishlistGrid");
     
@@ -46,10 +59,13 @@ function loadWishlist() {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var votes = data.votes || {};
+        var votes = extractVotes(data);
         renderWishlist(container, votes);
     })
     .catch(function(error) {
@@ -146,10 +162,13 @@ function toggleVote(movieId) {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var votes = data.votes || {};
+        var votes = extractVotes(data);
         
         if (hasVoted) {
             votes[movieId] = Math.max(0, (votes[movieId] || 1) - 1);

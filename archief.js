@@ -27,6 +27,24 @@ function getOrCreateUserId() {
 
 var oderId = getOrCreateUserId();
 
+function extractArchiveData(data) {
+    var result = { ratings: {}, comments: {} };
+    
+    if (!data || typeof data !== "object") {
+        return result;
+    }
+    if (data.key === "value") {
+        return result;
+    }
+    if (data.ratings && typeof data.ratings === "object") {
+        result.ratings = data.ratings;
+    }
+    if (data.comments && typeof data.comments === "object") {
+        result.comments = data.comments;
+    }
+    return result;
+}
+
 function loadArchive() {
     var container = document.getElementById("archiveGrid");
     
@@ -53,12 +71,14 @@ function loadArchive() {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var ratings = data.ratings || {};
-        var comments = data.comments || {};
-        renderArchive(container, movies, ratings, comments);
+        var archiveData = extractArchiveData(data);
+        renderArchive(container, movies, archiveData.ratings, archiveData.comments);
     })
     .catch(function(error) {
         renderArchive(container, movies, {}, {});
@@ -177,11 +197,15 @@ function setRating(movieId, rating) {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var ratings = data.ratings || {};
-        var comments = data.comments || {};
+        var archiveData = extractArchiveData(data);
+        var ratings = archiveData.ratings;
+        var comments = archiveData.comments;
         
         if (!ratings[movieId]) {
             ratings[movieId] = [];
@@ -262,11 +286,15 @@ function addComment(movieId) {
         }
     })
     .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
         return response.json();
     })
     .then(function(data) {
-        var ratings = data.ratings || {};
-        var comments = data.comments || {};
+        var archiveData = extractArchiveData(data);
+        var ratings = archiveData.ratings;
+        var comments = archiveData.comments;
         
         if (!comments[movieId]) {
             comments[movieId] = [];
