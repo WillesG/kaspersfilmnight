@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verlanglijst — Kasper's Film Night 🎬</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body class="page-wishlist">
+    <!-- Cinema screen background -->
+    <div class="cinema-bg">
+        <div class="screen-glow"></div>
+        <div class="curtain curtain-left"></div>
+        <div class="curtain curtain-right"></div>
+    </div>
+
+    <!-- Floating popcorn decorations -->
+    <div class="floating-popcorn">
+        <span class="popcorn-piece" style="left: 5%; animation-delay: 0s;">🍿</span>
+        <span class="popcorn-piece" style="left: 15%; animation-delay: 1.5s;">🍿</span>
+        <span class="popcorn-piece" style="left: 85%; animation-delay: 0.8s;">🍿</span>
+        <span class="popcorn-piece" style="left: 92%; animation-delay: 2.2s;">🍿</span>
+    </div>
+    
+    <nav class="main-nav">
+        <a href="index.html" class="nav-logo">
+            <span class="logo-icon">🎬</span>
+            <span class="logo-text">KFN</span>
+        </a>
+        <div class="nav-links">
+            <a href="index.html" class="nav-btn">
+                <span class="btn-icon">🎥</span>
+                Nu Draait
+            </a>
+            <a href="wishlist.html" class="nav-btn active">
+                <span class="btn-icon">⭐</span>
+                Verlanglijst
+            </a>
+            <a href="archief.html" class="nav-btn">
+                <span class="btn-icon">📚</span>
+                Archief
+            </a>
+        </div>
+    </nav>
+
+    <main class="main-content">
+        <header class="page-header">
+            <h1 class="page-title">
+                <span class="title-icon">⭐</span>
+                Verlanglijst
+            </h1>
+            <p class="page-subtitle">Stem op de films die je wilt zien!<br>Klik op de 🍿 om te stemmen.</p>
+        </header>
+
+        <section class="wishlist-section">
+            <div class="section-container">
+                <!-- Admin panel -->
+                <div id="adminPanel" class="admin-panel hidden">
+                    <h3>🔧 Film Toevoegen</h3>
+                    <div class="admin-form">
+                        <div class="form-group">
+                            <input type="text" id="newMovieTitle" placeholder="Filmtitel">
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="newMovieYear" placeholder="Jaar">
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="newMoviePoster" placeholder="Poster URL (optioneel)">
+                        </div>
+                        <button id="addMovie" class="btn-popcorn">
+                            <span class="btn-popcorn-icon">➕</span>
+                            Toevoegen
+                        </button>
+                    </div>
+                </div>
+
+                <div class="wishlist-grid" id="wishlistGrid">
+                    <!-- Wishlist items loaded here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="main-footer">
+        <div class="footer-content">
+            <div class="footer-logo">🎬 Kasper's Film Night</div>
+            <p class="footer-text">Gemaakt met ❤️ en heel veel 🍿</p>
+        </div>
+    </footer>
+
+    <script src="data.js"></script>
+    <script src="wishlist.js"></script>
+</body>
+</html>
