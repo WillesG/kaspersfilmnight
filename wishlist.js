@@ -32,34 +32,25 @@ function saveUserVotesLocal(votes) {
 }
 
 function extractVotes(data) {
-    if (!data || typeof data !== "object") {
+    console.log("Raw Pantry data:", data);
+    
+    if (!data) {
+        console.log("No data received");
         return {};
     }
-    if (data.votes && typeof data.votes === "object" && !Array.isArray(data.votes)) {
+    
+    if (typeof data !== "object") {
+        console.log("Data is not an object");
+        return {};
+    }
+    
+    if (data.votes) {
+        console.log("Found votes:", data.votes);
         return data.votes;
     }
-    if (data.key === "value") {
-        return {};
-    }
+    
+    console.log("No votes property found");
     return {};
-}
-
-function fetchWithTimeout(url, options, timeout) {
-    return new Promise(function(resolve, reject) {
-        var timer = setTimeout(function() {
-            reject(new Error("Timeout"));
-        }, timeout || 10000);
-        
-        fetch(url, options)
-            .then(function(response) {
-                clearTimeout(timer);
-                resolve(response);
-            })
-            .catch(function(err) {
-                clearTimeout(timer);
-                reject(err);
-            });
-    });
 }
 
 function loadWishlist() {
@@ -71,26 +62,25 @@ function loadWishlist() {
     
     container.innerHTML = "<div style=\"grid-column: 1/-1; text-align: center; padding: 3rem; color: #FFD166;\">🍿 Stemmen laden...</div>";
     
-    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }, 10000)
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Fetch failed: " + response.status);
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        var votes = extractVotes(data);
-        renderWishlist(container, votes);
-    })
-    .catch(function(error) {
-        console.error("Load error:", error);
-        renderWishlist(container, {});
-    });
+    fetch(PANTRY_URL + BASKET_NAME)
+        .then(function(response) {
+            console.log("Fetch response status:", response.status);
+            if (!response.ok) {
+                throw new Error("Fetch failed: " + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Raw response text:", text);
+            var data = JSON.parse(text);
+            var votes = extractVotes(data);
+            console.log("Extracted votes:", votes);
+            renderWishlist(container, votes);
+        })
+        .catch(function(error) {
+            console.error("Load error:", error);
+            renderWishlist(container, {});
+        });
 }
 
 function renderWishlist(container, votes) {
@@ -115,6 +105,8 @@ function renderWishlist(container, votes) {
     }
     
     var userVotes = getUserVotesLocal();
+    console.log("User local votes:", userVotes);
+    console.log("Server votes:", votes);
     
     allMovies.sort(function(a, b) {
         return (votes[b.id] || 0) - (votes[a.id] || 0);
@@ -132,6 +124,8 @@ function renderWishlist(container, votes) {
                 break;
             }
         }
+        
+        console.log("Movie:", movie.id, "votes:", voteCount, "userVoted:", hasVoted);
         
         var deleteBtn = "";
         if (isAdminMode && isCustom) {
@@ -174,81 +168,69 @@ function toggleVote(movieId) {
     var userVotes = getUserVotesLocal();
     var hasVoted = userVotes.indexOf(movieId) !== -1;
     
-    var btn = document.querySelector(".wishlist-card[data-id=\"" + movieId + "\"] .vote-btn");
-    var countSpan = document.getElementById("count-" + movieId);
+    console.log("Toggle vote for:", movieId, "hasVoted:", hasVoted);
     
+    var btn = document.querySelector(".wishlist-card[data-id=\"" + movieId + "\"] .vote-btn");
     if (btn) {
         btn.disabled = true;
         btn.style.opacity = "0.5";
     }
     
-    doVoteWithRetry(movieId, hasVoted, userVotes, 0, function(success) {
-        isVoting = false;
-        if (success) {
+    fetch(PANTRY_URL + BASKET_NAME)
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Fetch failed: " + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Vote - raw response:", text);
+            var data = JSON.parse(text);
+            var votes = extractVotes(data);
+            
+            if (hasVoted) {
+                votes[movieId] = Math.max(0, (votes[movieId] || 1) - 1);
+                var index = userVotes.indexOf(movieId);
+                if (index !== -1) {
+                    userVotes.splice(index, 1);
+                }
+            } else {
+                votes[movieId] = (votes[movieId] || 0) + 1;
+                userVotes.push(movieId);
+            }
+            
+            console.log("New votes to save:", votes);
+            saveUserVotesLocal(userVotes);
+            
+            return fetch(PANTRY_URL + BASKET_NAME, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ votes: votes })
+            });
+        })
+        .then(function(response) {
+            console.log("Save response status:", response.status);
+            if (!response.ok) {
+                throw new Error("Save failed: " + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Save response:", text);
+            isVoting = false;
             loadWishlist();
-        } else {
-            alert("Stemmen mislukt. Probeer de pagina te verversen.");
+        })
+        .catch(function(error) {
+            console.error("Vote error:", error);
+            isVoting = false;
+            alert("Er ging iets mis. Probeer opnieuw.");
             if (btn) {
                 btn.disabled = false;
                 btn.style.opacity = "1";
             }
-        }
-    });
-}
-
-function doVoteWithRetry(movieId, hasVoted, userVotes, attempt, callback) {
-    if (attempt >= 3) {
-        callback(false);
-        return;
-    }
-    
-    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }, 10000)
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Fetch failed: " + response.status);
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        var votes = extractVotes(data);
-        
-        if (hasVoted) {
-            votes[movieId] = Math.max(0, (votes[movieId] || 1) - 1);
-            var index = userVotes.indexOf(movieId);
-            if (index !== -1) {
-                userVotes.splice(index, 1);
-            }
-        } else {
-            votes[movieId] = (votes[movieId] || 0) + 1;
-            userVotes.push(movieId);
-        }
-        
-        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ votes: votes })
-        }, 10000);
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Save failed: " + response.status);
-        }
-        saveUserVotesLocal(userVotes);
-        callback(true);
-    })
-    .catch(function(error) {
-        console.error("Vote attempt " + (attempt + 1) + " failed:", error);
-        setTimeout(function() {
-            doVoteWithRetry(movieId, hasVoted, getUserVotesLocal(), attempt + 1, callback);
-        }, 500 * (attempt + 1));
-    });
+        });
 }
 
 function setupAdminPanel() {
