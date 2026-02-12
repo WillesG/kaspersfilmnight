@@ -6,6 +6,9 @@ var PANTRY_ID = "60eda3f0-b164-4072-bf6b-b824a2bc5c91";
 var PANTRY_URL = "https://getpantry.cloud/apiv1/pantry/" + PANTRY_ID + "/basket/";
 var BASKET_NAME = "archive_data";
 
+var isRating = false;
+var isCommenting = false;
+
 document.addEventListener("DOMContentLoaded", function() {
     loadArchive();
 });
@@ -36,13 +39,31 @@ function extractArchiveData(data) {
     if (data.key === "value") {
         return result;
     }
-    if (data.ratings && typeof data.ratings === "object") {
+    if (data.ratings && typeof data.ratings === "object" && !Array.isArray(data.ratings)) {
         result.ratings = data.ratings;
     }
-    if (data.comments && typeof data.comments === "object") {
+    if (data.comments && typeof data.comments === "object" && !Array.isArray(data.comments)) {
         result.comments = data.comments;
     }
     return result;
+}
+
+function fetchWithTimeout(url, options, timeout) {
+    return new Promise(function(resolve, reject) {
+        var timer = setTimeout(function() {
+            reject(new Error("Timeout"));
+        }, timeout || 10000);
+        
+        fetch(url, options)
+            .then(function(response) {
+                clearTimeout(timer);
+                resolve(response);
+            })
+            .catch(function(err) {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
 }
 
 function loadArchive() {
@@ -64,12 +85,12 @@ function loadArchive() {
     
     container.innerHTML = "<div style=\"text-align: center; padding: 3rem; color: #FFD166;\">🎬 Archief laden...</div>";
     
-    fetch(PANTRY_URL + BASKET_NAME, {
+    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
         method: "GET",
         headers: {
             "Content-Type": "application/json"
         }
-    })
+    }, 10000)
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Fetch failed");
@@ -81,6 +102,7 @@ function loadArchive() {
         renderArchive(container, movies, archiveData.ratings, archiveData.comments);
     })
     .catch(function(error) {
+        console.error("Load archive error:", error);
         renderArchive(container, movies, {}, {});
     });
 }
@@ -93,11 +115,20 @@ function renderArchive(container, movies, ratings, comments) {
         var movieRatings = ratings[movie.id] || [];
         var movieComments = comments[movie.id] || [];
         
+        if (!Array.isArray(movieRatings)) {
+            movieRatings = [];
+        }
+        if (!Array.isArray(movieComments)) {
+            movieComments = [];
+        }
+        
         var avgRating = 0;
         if (movieRatings.length > 0) {
             var sum = 0;
             for (var r = 0; r < movieRatings.length; r++) {
-                sum += movieRatings[r].rating;
+                if (movieRatings[r] && typeof movieRatings[r].rating === "number") {
+                    sum += movieRatings[r].rating;
+                }
             }
             avgRating = Math.round(sum / movieRatings.length);
         }
@@ -128,7 +159,9 @@ function renderArchive(container, movies, ratings, comments) {
         } else {
             for (var c = 0; c < movieComments.length; c++) {
                 var comm = movieComments[c];
-                commentsListHtml += "<div class=\"archive-comment\"><strong>" + escapeHtml(comm.name || "Anoniem") + ":</strong> " + escapeHtml(comm.text || "") + "</div>";
+                if (comm && comm.name) {
+                    commentsListHtml += "<div class=\"archive-comment\"><strong>" + escapeHtml(comm.name || "Anoniem") + ":</strong> " + escapeHtml(comm.text || "") + "</div>";
+                }
             }
         }
         
@@ -182,6 +215,11 @@ function saveUserRatingLocal(movieId, rating) {
 }
 
 function setRating(movieId, rating) {
+    if (isRating) {
+        return;
+    }
+    isRating = true;
+    
     var oldRating = getUserRatingLocal(movieId);
     
     if (oldRating === rating) {
@@ -190,12 +228,24 @@ function setRating(movieId, rating) {
     
     saveUserRatingLocal(movieId, rating);
     
-    fetch(PANTRY_URL + BASKET_NAME, {
+    doRatingWithRetry(movieId, rating, 0, function(success) {
+        isRating = false;
+        loadArchive();
+    });
+}
+
+function doRatingWithRetry(movieId, rating, attempt, callback) {
+    if (attempt >= 3) {
+        callback(false);
+        return;
+    }
+    
+    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
         method: "GET",
         headers: {
             "Content-Type": "application/json"
         }
-    })
+    }, 10000)
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Fetch failed");
@@ -207,13 +257,13 @@ function setRating(movieId, rating) {
         var ratings = archiveData.ratings;
         var comments = archiveData.comments;
         
-        if (!ratings[movieId]) {
+        if (!ratings[movieId] || !Array.isArray(ratings[movieId])) {
             ratings[movieId] = [];
         }
         
         var found = false;
         for (var i = 0; i < ratings[movieId].length; i++) {
-            if (ratings[movieId][i].oderId === oderId) {
+            if (ratings[movieId][i] && ratings[movieId][i].oderId === oderId) {
                 if (rating === 0) {
                     ratings[movieId].splice(i, 1);
                 } else {
@@ -231,26 +281,33 @@ function setRating(movieId, rating) {
             });
         }
         
-        return fetch(PANTRY_URL + BASKET_NAME, {
+        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ ratings: ratings, comments: comments })
-        });
+        }, 10000);
     })
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Save failed");
         }
-        loadArchive();
+        callback(true);
     })
     .catch(function(error) {
-        loadArchive();
+        console.error("Rating attempt " + (attempt + 1) + " failed:", error);
+        setTimeout(function() {
+            doRatingWithRetry(movieId, rating, attempt + 1, callback);
+        }, 500 * (attempt + 1));
     });
 }
 
 function addComment(movieId) {
+    if (isCommenting) {
+        return;
+    }
+    
     var nameInput = document.getElementById("name-" + movieId);
     var commentInput = document.getElementById("comment-" + movieId);
     
@@ -273,18 +330,45 @@ function addComment(movieId) {
         return;
     }
     
+    isCommenting = true;
+    
     var btn = commentInput.nextElementSibling;
     if (btn) {
         btn.disabled = true;
         btn.textContent = "...";
     }
     
-    fetch(PANTRY_URL + BASKET_NAME, {
+    doCommentWithRetry(movieId, name, text, 0, function(success) {
+        isCommenting = false;
+        
+        if (success) {
+            nameInput.value = "";
+            commentInput.value = "";
+        } else {
+            alert("Versturen mislukt. Probeer opnieuw.");
+        }
+        
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = "Post";
+        }
+        
+        loadArchive();
+    });
+}
+
+function doCommentWithRetry(movieId, name, text, attempt, callback) {
+    if (attempt >= 3) {
+        callback(false);
+        return;
+    }
+    
+    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
         method: "GET",
         headers: {
             "Content-Type": "application/json"
         }
-    })
+    }, 10000)
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Fetch failed");
@@ -296,7 +380,7 @@ function addComment(movieId) {
         var ratings = archiveData.ratings;
         var comments = archiveData.comments;
         
-        if (!comments[movieId]) {
+        if (!comments[movieId] || !Array.isArray(comments[movieId])) {
             comments[movieId] = [];
         }
         
@@ -310,32 +394,25 @@ function addComment(movieId) {
             comments[movieId] = comments[movieId].slice(0, 30);
         }
         
-        return fetch(PANTRY_URL + BASKET_NAME, {
+        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
             method: "PUT",
             headers: {
                 "Content-Type": "application/json"
             },
             body: JSON.stringify({ ratings: ratings, comments: comments })
-        });
+        }, 10000);
     })
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Save failed");
         }
-        nameInput.value = "";
-        commentInput.value = "";
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Post";
-        }
-        loadArchive();
+        callback(true);
     })
     .catch(function(error) {
-        alert("Er ging iets mis. Probeer opnieuw.");
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Post";
-        }
+        console.error("Comment attempt " + (attempt + 1) + " failed:", error);
+        setTimeout(function() {
+            doCommentWithRetry(movieId, name, text, attempt + 1, callback);
+        }, 500 * (attempt + 1));
     });
 }
 

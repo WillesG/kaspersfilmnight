@@ -6,6 +6,8 @@ var PANTRY_ID = "60eda3f0-b164-4072-bf6b-b824a2bc5c91";
 var PANTRY_URL = "https://getpantry.cloud/apiv1/pantry/" + PANTRY_ID + "/basket/";
 var BASKET_NAME = "comments_main";
 
+var isSubmitting = false;
+
 document.addEventListener("DOMContentLoaded", function() {
     loadEventDetails();
     loadTrailer();
@@ -24,6 +26,24 @@ function extractComments(data) {
         return [];
     }
     return [];
+}
+
+function fetchWithTimeout(url, options, timeout) {
+    return new Promise(function(resolve, reject) {
+        var timer = setTimeout(function() {
+            reject(new Error("Timeout"));
+        }, timeout || 10000);
+        
+        fetch(url, options)
+            .then(function(response) {
+                clearTimeout(timer);
+                resolve(response);
+            })
+            .catch(function(err) {
+                clearTimeout(timer);
+                reject(err);
+            });
+    });
 }
 
 function loadEventDetails() {
@@ -98,12 +118,12 @@ function loadComments() {
     
     container.innerHTML = "<div class=\"no-comments\">💬 Reacties laden...</div>";
     
-    fetch(PANTRY_URL + BASKET_NAME, {
+    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
         method: "GET",
         headers: {
             "Content-Type": "application/json"
         }
-    })
+    }, 10000)
     .then(function(response) {
         if (!response.ok) {
             throw new Error("Fetch failed");
@@ -136,6 +156,7 @@ function loadComments() {
         container.innerHTML = html;
     })
     .catch(function(error) {
+        console.error("Load comments error:", error);
         container.innerHTML = "<div class=\"no-comments\">💬 Nog geen reacties. Wees de eerste!</div>";
     });
 }
@@ -152,6 +173,10 @@ function setupCommentForm() {
     submitBtn.onclick = function(e) {
         e.preventDefault();
         
+        if (isSubmitting) {
+            return;
+        }
+        
         var name = nameInput.value.trim();
         var text = textInput.value.trim();
         
@@ -167,62 +192,83 @@ function setupCommentForm() {
             return;
         }
         
+        isSubmitting = true;
         submitBtn.disabled = true;
         submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">⏳</span> Verzenden...";
         
-        fetch(PANTRY_URL + BASKET_NAME, {
-            method: "GET",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error("Fetch failed");
-            }
-            return response.json();
-        })
-        .then(function(data) {
-            var comments = extractComments(data);
+        submitCommentWithRetry(name, text, 0, function(success) {
+            isSubmitting = false;
             
-            comments.push({
-                name: name,
-                text: text,
-                timestamp: Date.now()
-            });
-            
-            if (comments.length > 50) {
-                comments = comments.slice(-50);
-            }
-            
-            return fetch(PANTRY_URL + BASKET_NAME, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ comments: comments })
-            });
-        })
-        .then(function(response) {
-            if (!response.ok) {
-                throw new Error("Save failed");
-            }
-            nameInput.value = "";
-            textInput.value = "";
-            loadComments();
-            submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">✅</span> Verstuurd!";
-            
-            setTimeout(function() {
+            if (success) {
+                nameInput.value = "";
+                textInput.value = "";
+                loadComments();
+                submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">✅</span> Verstuurd!";
+                
+                setTimeout(function() {
+                    submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">🍿</span> Verstuur Bericht";
+                    submitBtn.disabled = false;
+                }, 2000);
+            } else {
+                alert("Versturen mislukt. Probeer opnieuw.");
                 submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">🍿</span> Verstuur Bericht";
                 submitBtn.disabled = false;
-            }, 2000);
-        })
-        .catch(function(error) {
-            alert("Er ging iets mis. Probeer opnieuw.");
-            submitBtn.innerHTML = "<span class=\"btn-popcorn-icon\">🍿</span> Verstuur Bericht";
-            submitBtn.disabled = false;
+            }
         });
     };
+}
+
+function submitCommentWithRetry(name, text, attempt, callback) {
+    if (attempt >= 3) {
+        callback(false);
+        return;
+    }
+    
+    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
+        method: "GET",
+        headers: {
+            "Content-Type": "application/json"
+        }
+    }, 10000)
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Fetch failed");
+        }
+        return response.json();
+    })
+    .then(function(data) {
+        var comments = extractComments(data);
+        
+        comments.push({
+            name: name,
+            text: text,
+            timestamp: Date.now()
+        });
+        
+        if (comments.length > 50) {
+            comments = comments.slice(-50);
+        }
+        
+        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
+            method: "PUT",
+            headers: {
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ comments: comments })
+        }, 10000);
+    })
+    .then(function(response) {
+        if (!response.ok) {
+            throw new Error("Save failed");
+        }
+        callback(true);
+    })
+    .catch(function(error) {
+        console.error("Comment attempt " + (attempt + 1) + " failed:", error);
+        setTimeout(function() {
+            submitCommentWithRetry(name, text, attempt + 1, callback);
+        }, 500 * (attempt + 1));
+    });
 }
 
 function escapeHtml(text) {
