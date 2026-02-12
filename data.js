@@ -3,13 +3,13 @@
    ======================================== */
 
 var CURRENT_EVENT = {
-    title: "Spider-Man: Across the Spider-Verse",
-    year: "2024",
-    date: "Zaterdag 15 februari",
-    time: "19:00 uur",
+    title: "Hoe Tem Je Een Draak",
+    year: "2025",
+    date: "Vrijdag 13 februari",
+    time: "19:00 - 21:00 uur",
     youtubeId: "vr4xaj2rqzQ",
-    poster: "",
-    message: "Neem lekkers mee!"
+    poster: "https://images.pathe-thuis.nl/38839_450x640.jpg",
+    message: "Neem wat lekkers mee!"
 };
 
 var WISHLIST_MOVIES = [
