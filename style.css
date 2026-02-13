@@ -1302,21 +1302,32 @@ body {
     flex-wrap: wrap;
 }
 
+.stars-container {
+    display: flex;
+    gap: 0.25rem;
+}
+
 .star {
-    font-size: 1.8rem;
+    font-size: 2rem;
     cursor: pointer;
-    filter: grayscale(100%) brightness(0.5);
+    color: #444;
     transition: all 0.2s ease;
+    text-shadow: none;
 }
 
 .star:hover {
-    transform: scale(1.2);
-    filter: grayscale(0%);
+    transform: scale(1.3);
+    color: #FFD166;
 }
 
 .star.active {
-    filter: grayscale(0%);
-    animation: starPop 0.3s ease;
+    color: #FFD166;
+    text-shadow: 0 0 10px rgba(255, 209, 102, 0.5);
+}
+
+.star.user-voted {
+    color: #4ECDC4;
+    text-shadow: 0 0 10px rgba(78, 205, 196, 0.5);
 }
 
 @keyframes starPop {
@@ -1346,25 +1357,32 @@ body {
 
 .archive-comment-form {
     display: flex;
+    flex-direction: column;
     gap: var(--space-xs);
-    margin-bottom: var(--space-sm);
-    flex-wrap: wrap;
+    margin-bottom: var(--space-md);
 }
 
-.archive-comment-form input {
-    flex: 1;
-    min-width: 100px;
-    padding: var(--space-xs) var(--space-sm);
+.archive-comment-form input,
+.archive-comment-form textarea {
+    width: 100%;
+    padding: var(--space-sm);
     font-family: var(--font-body);
-    font-size: 0.9rem;
+    font-size: 0.95rem;
     background: var(--dark);
     border: 2px solid var(--gray);
     border-radius: var(--radius-sm);
     color: var(--white);
     transition: border-color 0.3s ease;
+    box-sizing: border-box;
 }
 
-.archive-comment-form input:focus {
+.archive-comment-form textarea {
+    resize: vertical;
+    min-height: 60px;
+}
+
+.archive-comment-form input:focus,
+.archive-comment-form textarea:focus {
     outline: none;
     border-color: var(--pink-primary);
 }
@@ -1387,21 +1405,39 @@ body {
 }
 
 .archive-comments-list {
-    max-height: 150px;
+    max-height: 200px;
     overflow-y: auto;
+    margin-top: var(--space-sm);
+}
+
+.no-comments-text {
+    color: #888;
+    font-size: 0.9rem;
+    font-style: italic;
+    padding: var(--space-sm);
 }
 
 .archive-comment {
-    font-size: 0.9rem;
-    padding: var(--space-xs) var(--space-sm);
+    padding: var(--space-sm);
     background: rgba(255, 255, 255, 0.05);
     border-radius: var(--radius-sm);
     margin-bottom: var(--space-xs);
-    animation: slideInComment 0.3s ease;
+    border-left: 3px solid var(--yellow-primary);
 }
 
-.archive-comment strong {
+.archive-comment .comment-author {
+    display: block;
+    font-weight: bold;
     color: var(--yellow-primary);
+    font-size: 0.9rem;
+    margin-bottom: 0.25rem;
+}
+
+.archive-comment .comment-text {
+    display: block;
+    color: var(--white);
+    font-size: 0.95rem;
+    line-height: 1.4;
 }
 
 /* ==========================================

@@ -8,8 +8,10 @@ var BASKET_NAME = "archive_data";
 
 var isRating = false;
 var isCommenting = false;
+var userId = getOrCreateUserId();
 
 document.addEventListener("DOMContentLoaded", function() {
+    console.log("Archief loaded, userId:", userId);
     loadArchive();
 });
 
@@ -28,48 +30,33 @@ function getOrCreateUserId() {
     return id;
 }
 
-var oderId = getOrCreateUserId();
-
 function extractArchiveData(data) {
+    console.log("Raw archive data:", data);
+    
     var result = { ratings: {}, comments: {} };
     
     if (!data || typeof data !== "object") {
+        console.log("Invalid data");
         return result;
     }
-    if (data.key === "value") {
-        return result;
-    }
-    if (data.ratings && typeof data.ratings === "object" && !Array.isArray(data.ratings)) {
+    
+    if (data.ratings && typeof data.ratings === "object") {
         result.ratings = data.ratings;
     }
-    if (data.comments && typeof data.comments === "object" && !Array.isArray(data.comments)) {
+    
+    if (data.comments && typeof data.comments === "object") {
         result.comments = data.comments;
     }
+    
+    console.log("Extracted archive data:", result);
     return result;
-}
-
-function fetchWithTimeout(url, options, timeout) {
-    return new Promise(function(resolve, reject) {
-        var timer = setTimeout(function() {
-            reject(new Error("Timeout"));
-        }, timeout || 10000);
-        
-        fetch(url, options)
-            .then(function(response) {
-                clearTimeout(timer);
-                resolve(response);
-            })
-            .catch(function(err) {
-                clearTimeout(timer);
-                reject(err);
-            });
-    });
 }
 
 function loadArchive() {
     var container = document.getElementById("archiveGrid");
     
     if (!container) {
+        console.log("No archiveGrid container found");
         return;
     }
     
@@ -78,6 +65,8 @@ function loadArchive() {
         movies = ARCHIVE_MOVIES;
     }
     
+    console.log("Archive movies:", movies);
+    
     if (movies.length === 0) {
         container.innerHTML = "<div style=\"text-align: center; padding: 3rem; color: #888;\">Nog geen films gekeken! Het archief is nog leeg.</div>";
         return;
@@ -85,29 +74,29 @@ function loadArchive() {
     
     container.innerHTML = "<div style=\"text-align: center; padding: 3rem; color: #FFD166;\">🎬 Archief laden...</div>";
     
-    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }, 10000)
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Fetch failed");
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        var archiveData = extractArchiveData(data);
-        renderArchive(container, movies, archiveData.ratings, archiveData.comments);
-    })
-    .catch(function(error) {
-        console.error("Load archive error:", error);
-        renderArchive(container, movies, {}, {});
-    });
+    fetch(PANTRY_URL + BASKET_NAME)
+        .then(function(response) {
+            console.log("Archive fetch status:", response.status);
+            if (!response.ok) {
+                throw new Error("Fetch failed: " + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Raw archive response:", text);
+            var data = JSON.parse(text);
+            var archiveData = extractArchiveData(data);
+            renderArchive(container, movies, archiveData.ratings, archiveData.comments);
+        })
+        .catch(function(error) {
+            console.error("Load archive error:", error);
+            renderArchive(container, movies, {}, {});
+        });
 }
 
 function renderArchive(container, movies, ratings, comments) {
+    console.log("Rendering archive with ratings:", ratings, "comments:", comments);
+    
     var html = "";
     
     for (var i = 0; i < movies.length; i++) {
@@ -122,16 +111,25 @@ function renderArchive(container, movies, ratings, comments) {
             movieComments = [];
         }
         
+        console.log("Movie:", movie.id, "ratings:", movieRatings, "comments:", movieComments);
+        
         var avgRating = 0;
+        var totalRatings = 0;
         if (movieRatings.length > 0) {
             var sum = 0;
             for (var r = 0; r < movieRatings.length; r++) {
                 if (movieRatings[r] && typeof movieRatings[r].rating === "number") {
                     sum += movieRatings[r].rating;
+                    totalRatings++;
                 }
             }
-            avgRating = Math.round(sum / movieRatings.length);
+            if (totalRatings > 0) {
+                avgRating = sum / totalRatings;
+            }
         }
+        
+        var userRating = getUserRatingForMovie(movieRatings, userId);
+        console.log("Movie:", movie.id, "avgRating:", avgRating, "userRating:", userRating, "totalRatings:", totalRatings);
         
         var posterHtml = "";
         if (movie.poster) {
@@ -140,27 +138,41 @@ function renderArchive(container, movies, ratings, comments) {
             posterHtml = "<div class=\"poster-placeholder\">🎬</div>";
         }
         
-        var starsHtml = "";
+        var starsHtml = "<div class=\"stars-container\">";
         for (var s = 1; s <= 5; s++) {
-            var activeClass = s <= avgRating ? " active" : "";
-            starsHtml += "<span class=\"star" + activeClass + "\" data-rating=\"" + s + "\" onclick=\"setRating('" + escapeHtml(movie.id) + "', " + s + ")\" style=\"cursor: pointer;\">⭐</span>";
+            var starClass = "star";
+            if (s <= Math.round(avgRating)) {
+                starClass += " active";
+            }
+            if (s <= userRating) {
+                starClass += " user-voted";
+            }
+            starsHtml += "<span class=\"" + starClass + "\" data-rating=\"" + s + "\" data-movie=\"" + escapeHtml(movie.id) + "\" onclick=\"setRating('" + escapeHtml(movie.id) + "', " + s + ")\">★</span>";
         }
+        starsHtml += "</div>";
         
         var ratingText = "";
-        if (movieRatings.length > 0) {
-            ratingText = avgRating + "/5 (" + movieRatings.length + " " + (movieRatings.length === 1 ? "stem" : "stemmen") + ")";
+        if (totalRatings > 0) {
+            ratingText = avgRating.toFixed(1) + "/5 (" + totalRatings + " " + (totalRatings === 1 ? "stem" : "stemmen") + ")";
         } else {
             ratingText = "Nog niet beoordeeld";
         }
         
+        if (userRating > 0) {
+            ratingText += " - Jouw stem: " + userRating + "★";
+        }
+        
         var commentsListHtml = "";
         if (movieComments.length === 0) {
-            commentsListHtml = "<p style=\"color: #888; font-size: 0.85rem; padding: 0.5rem;\">Nog geen reacties!</p>";
+            commentsListHtml = "<p class=\"no-comments-text\">Nog geen reacties!</p>";
         } else {
             for (var c = 0; c < movieComments.length; c++) {
                 var comm = movieComments[c];
                 if (comm && comm.name) {
-                    commentsListHtml += "<div class=\"archive-comment\"><strong>" + escapeHtml(comm.name || "Anoniem") + ":</strong> " + escapeHtml(comm.text || "") + "</div>";
+                    commentsListHtml += "<div class=\"archive-comment\">" +
+                        "<span class=\"comment-author\">" + escapeHtml(comm.name) + "</span>" +
+                        "<span class=\"comment-text\">" + escapeHtml(comm.text || "") + "</span>" +
+                        "</div>";
                 }
             }
         }
@@ -172,16 +184,16 @@ function renderArchive(container, movies, ratings, comments) {
                     "<h3 class=\"archive-title\">" + escapeHtml(movie.title) + "</h3>" +
                     "<p class=\"archive-meta\">" + escapeHtml(movie.year || "") + " - Gekeken: " + escapeHtml(movie.watchedDate || "") + "</p>" +
                 "</div>" +
-                "<div class=\"archive-rating\" data-movie=\"" + escapeHtml(movie.id) + "\">" +
+                "<div class=\"archive-rating\">" +
                     starsHtml +
                     "<span class=\"rating-text\">" + ratingText + "</span>" +
                 "</div>" +
                 "<div class=\"archive-comments\">" +
-                    "<h4>Reacties (" + movieComments.length + ")</h4>" +
+                    "<h4>💬 Reacties (" + movieComments.length + ")</h4>" +
                     "<div class=\"archive-comment-form\">" +
-                        "<input type=\"text\" id=\"name-" + escapeHtml(movie.id) + "\" placeholder=\"Je naam\" maxlength=\"20\">" +
-                        "<input type=\"text\" id=\"comment-" + escapeHtml(movie.id) + "\" placeholder=\"Wat vond je ervan?\" maxlength=\"150\">" +
-                        "<button onclick=\"addComment('" + escapeHtml(movie.id) + "')\">Post</button>" +
+                        "<input type=\"text\" id=\"name-" + escapeHtml(movie.id) + "\" placeholder=\"Je naam\" maxlength=\"30\">" +
+                        "<textarea id=\"comment-" + escapeHtml(movie.id) + "\" placeholder=\"Wat vond je van de film?\" maxlength=\"200\" rows=\"2\"></textarea>" +
+                        "<button onclick=\"addComment('" + escapeHtml(movie.id) + "')\">Verstuur</button>" +
                     "</div>" +
                     "<div class=\"archive-comments-list\" id=\"comments-" + escapeHtml(movie.id) + "\">" +
                         commentsListHtml +
@@ -194,117 +206,100 @@ function renderArchive(container, movies, ratings, comments) {
     container.innerHTML = html;
 }
 
-function getUserRatingLocal(movieId) {
-    try {
-        var stored = localStorage.getItem("kfn_user_ratings");
-        if (stored) {
-            var ratings = JSON.parse(stored);
-            return ratings[movieId] || 0;
+function getUserRatingForMovie(movieRatings, oderId) {
+    for (var i = 0; i < movieRatings.length; i++) {
+        if (movieRatings[i] && movieRatings[i].oderId === oderId) {
+            return movieRatings[i].rating;
         }
-    } catch (e) {}
+    }
     return 0;
-}
-
-function saveUserRatingLocal(movieId, rating) {
-    try {
-        var stored = localStorage.getItem("kfn_user_ratings");
-        var ratings = stored ? JSON.parse(stored) : {};
-        ratings[movieId] = rating;
-        localStorage.setItem("kfn_user_ratings", JSON.stringify(ratings));
-    } catch (e) {}
 }
 
 function setRating(movieId, rating) {
     if (isRating) {
+        console.log("Already rating, skipping");
         return;
     }
     isRating = true;
     
-    var oldRating = getUserRatingLocal(movieId);
+    console.log("Setting rating for", movieId, "to", rating, "by user", userId);
     
-    if (oldRating === rating) {
-        rating = 0;
+    var stars = document.querySelectorAll(".star[data-movie=\"" + movieId + "\"]");
+    for (var i = 0; i < stars.length; i++) {
+        stars[i].style.opacity = "0.5";
+        stars[i].style.pointerEvents = "none";
     }
     
-    saveUserRatingLocal(movieId, rating);
-    
-    doRatingWithRetry(movieId, rating, 0, function(success) {
-        isRating = false;
-        loadArchive();
-    });
-}
-
-function doRatingWithRetry(movieId, rating, attempt, callback) {
-    if (attempt >= 3) {
-        callback(false);
-        return;
-    }
-    
-    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }, 10000)
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Fetch failed");
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        var archiveData = extractArchiveData(data);
-        var ratings = archiveData.ratings;
-        var comments = archiveData.comments;
-        
-        if (!ratings[movieId] || !Array.isArray(ratings[movieId])) {
-            ratings[movieId] = [];
-        }
-        
-        var found = false;
-        for (var i = 0; i < ratings[movieId].length; i++) {
-            if (ratings[movieId][i] && ratings[movieId][i].oderId === oderId) {
-                if (rating === 0) {
-                    ratings[movieId].splice(i, 1);
-                } else {
-                    ratings[movieId][i].rating = rating;
-                }
-                found = true;
-                break;
+    fetch(PANTRY_URL + BASKET_NAME)
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Fetch failed: " + response.status);
             }
-        }
-        
-        if (!found && rating > 0) {
-            ratings[movieId].push({
-                oderId: oderId,
-                rating: rating
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Rating - raw response:", text);
+            var data = JSON.parse(text);
+            var archiveData = extractArchiveData(data);
+            var ratings = archiveData.ratings;
+            var comments = archiveData.comments;
+            
+            if (!ratings[movieId] || !Array.isArray(ratings[movieId])) {
+                ratings[movieId] = [];
+            }
+            
+            var found = false;
+            for (var i = 0; i < ratings[movieId].length; i++) {
+                if (ratings[movieId][i] && ratings[movieId][i].oderId === userId) {
+                    if (ratings[movieId][i].rating === rating) {
+                        ratings[movieId].splice(i, 1);
+                        console.log("Removed existing rating");
+                    } else {
+                        ratings[movieId][i].rating = rating;
+                        console.log("Updated existing rating to", rating);
+                    }
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                ratings[movieId].push({
+                    oderId: userId,
+                    rating: rating
+                });
+                console.log("Added new rating:", rating);
+            }
+            
+            console.log("Saving ratings:", ratings);
+            
+            return fetch(PANTRY_URL + BASKET_NAME, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ ratings: ratings, comments: comments })
             });
-        }
-        
-        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ ratings: ratings, comments: comments })
-        }, 10000);
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Save failed");
-        }
-        callback(true);
-    })
-    .catch(function(error) {
-        console.error("Rating attempt " + (attempt + 1) + " failed:", error);
-        setTimeout(function() {
-            doRatingWithRetry(movieId, rating, attempt + 1, callback);
-        }, 500 * (attempt + 1));
-    });
+        })
+        .then(function(response) {
+            console.log("Save rating response:", response.status);
+            if (!response.ok) {
+                throw new Error("Save failed: " + response.status);
+            }
+            isRating = false;
+            loadArchive();
+        })
+        .catch(function(error) {
+            console.error("Rating error:", error);
+            isRating = false;
+            alert("Er ging iets mis bij het opslaan van je stem. Probeer opnieuw.");
+            loadArchive();
+        });
 }
 
 function addComment(movieId) {
     if (isCommenting) {
+        console.log("Already commenting, skipping");
         return;
     }
     
@@ -312,6 +307,7 @@ function addComment(movieId) {
     var commentInput = document.getElementById("comment-" + movieId);
     
     if (!nameInput || !commentInput) {
+        console.log("Input fields not found for", movieId);
         return;
     }
     
@@ -331,89 +327,75 @@ function addComment(movieId) {
     }
     
     isCommenting = true;
+    console.log("Adding comment for", movieId, "by", name);
     
-    var btn = commentInput.nextElementSibling;
+    var btn = document.querySelector(".archive-card[data-id=\"" + movieId + "\"] .archive-comment-form button");
     if (btn) {
         btn.disabled = true;
-        btn.textContent = "...";
+        btn.textContent = "Verzenden...";
     }
     
-    doCommentWithRetry(movieId, name, text, 0, function(success) {
-        isCommenting = false;
-        
-        if (success) {
+    fetch(PANTRY_URL + BASKET_NAME)
+        .then(function(response) {
+            if (!response.ok) {
+                throw new Error("Fetch failed: " + response.status);
+            }
+            return response.text();
+        })
+        .then(function(text) {
+            console.log("Comment - raw response:", text);
+            var data = JSON.parse(text);
+            var archiveData = extractArchiveData(data);
+            var ratings = archiveData.ratings;
+            var comments = archiveData.comments;
+            
+            if (!comments[movieId] || !Array.isArray(comments[movieId])) {
+                comments[movieId] = [];
+            }
+            
+            comments[movieId].unshift({
+                name: name,
+                text: text,
+                timestamp: Date.now()
+            });
+            
+            if (comments[movieId].length > 50) {
+                comments[movieId] = comments[movieId].slice(0, 50);
+            }
+            
+            console.log("Saving comments:", comments);
+            
+            return fetch(PANTRY_URL + BASKET_NAME, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ ratings: ratings, comments: comments })
+            });
+        })
+        .then(function(response) {
+            console.log("Save comment response:", response.status);
+            if (!response.ok) {
+                throw new Error("Save failed: " + response.status);
+            }
             nameInput.value = "";
             commentInput.value = "";
-        } else {
-            alert("Versturen mislukt. Probeer opnieuw.");
-        }
-        
-        if (btn) {
-            btn.disabled = false;
-            btn.textContent = "Post";
-        }
-        
-        loadArchive();
-    });
-}
-
-function doCommentWithRetry(movieId, name, text, attempt, callback) {
-    if (attempt >= 3) {
-        callback(false);
-        return;
-    }
-    
-    fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-        method: "GET",
-        headers: {
-            "Content-Type": "application/json"
-        }
-    }, 10000)
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Fetch failed");
-        }
-        return response.json();
-    })
-    .then(function(data) {
-        var archiveData = extractArchiveData(data);
-        var ratings = archiveData.ratings;
-        var comments = archiveData.comments;
-        
-        if (!comments[movieId] || !Array.isArray(comments[movieId])) {
-            comments[movieId] = [];
-        }
-        
-        comments[movieId].unshift({
-            name: name,
-            text: text,
-            timestamp: Date.now()
+            isCommenting = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = "Verstuur";
+            }
+            loadArchive();
+        })
+        .catch(function(error) {
+            console.error("Comment error:", error);
+            isCommenting = false;
+            if (btn) {
+                btn.disabled = false;
+                btn.textContent = "Verstuur";
+            }
+            alert("Er ging iets mis bij het versturen. Probeer opnieuw.");
         });
-        
-        if (comments[movieId].length > 30) {
-            comments[movieId] = comments[movieId].slice(0, 30);
-        }
-        
-        return fetchWithTimeout(PANTRY_URL + BASKET_NAME, {
-            method: "PUT",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ ratings: ratings, comments: comments })
-        }, 10000);
-    })
-    .then(function(response) {
-        if (!response.ok) {
-            throw new Error("Save failed");
-        }
-        callback(true);
-    })
-    .catch(function(error) {
-        console.error("Comment attempt " + (attempt + 1) + " failed:", error);
-        setTimeout(function() {
-            doCommentWithRetry(movieId, name, text, attempt + 1, callback);
-        }, 500 * (attempt + 1));
-    });
 }
 
 function escapeHtml(text) {
