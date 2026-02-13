@@ -54,10 +54,10 @@ var WISHLIST_MOVIES = [
 var ARCHIVE_MOVIES = [
     {
         id: "arch1",
-        title: "Puss in Boots: The Last Wish",
+        title: "Hoe Tem Je Een Draak",
         year: "2022",
-        watchedDate: "25 januari 2025",
-        poster: ""
+        watchedDate: "13 februari 2026",
+        poster: "https://images.pathe-thuis.nl/38839_450x640.jpg"
     },
     {
         id: "arch2",
