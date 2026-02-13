@@ -15,39 +15,39 @@ var CURRENT_EVENT = {
 var WISHLIST_MOVIES = [
     {
         id: "wish1",
-        title: "Teenage Mutant Ninja Turtles: Mutant Mayhem",
+        title: "The Super Mario Bros. Movie",
         year: "2023",
-        poster: ""
+        poster: "https://cdn11.bigcommerce.com/s-ydriczk/images/stencil/1500x1500/products/90380/99064/super-mario-bros-2023-advance-style-B-original-movie-poster-us-one-sheet-buy-now-at-starstills__89412.1703695191.jpg?c=2"
     },
     {
         id: "wish2",
-        title: "Elemental",
+        title: "De Wilde Robot",
         year: "2023",
-        poster: ""
+        poster: "https://images.pathe-thuis.nl/37777_450x640.jpg"
     },
     {
         id: "wish3",
-        title: "Migration",
+        title: "Mufasa The Lion King",
         year: "2023",
-        poster: ""
+        poster: "https://i.redd.it/xefmuhzn4thd1.png"
     },
     {
         id: "wish4",
         title: "Wonka",
         year: "2023",
-        poster: ""
+        poster: "https://m.media-amazon.com/images/M/MV5BM2Y1N2ZhNjctYjVhZC00MDg2LWFhNTItMzI3ZjAwZDhjYmFiXkEyXkFqcGc@._V1_.jpg"
     },
     {
         id: "wish5",
-        title: "The Super Mario Bros. Movie",
-        year: "2023",
-        poster: ""
+        title: "Sonic the Hedgehog 3",
+        year: "2025",
+        poster: "https://i.ebayimg.com/00/s/MTYwMFgxMDgw/z/AfUAAOSwo-JnO8jH/$_57.JPG?set_id=880000500F"
     },
     {
         id: "wish6",
-        title: "Guardians of the Galaxy Vol. 3",
-        year: "2023",
-        poster: ""
+        title: "Paddington in Peru",
+        year: "2025",
+        poster: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIn8Lanzp07svwrPnMaDLSJgiOcPcbwxW6UQ&s"
     }
 ];
 
