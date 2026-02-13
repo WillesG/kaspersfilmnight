@@ -47,7 +47,7 @@ var WISHLIST_MOVIES = [
         id: "wish6",
         title: "Paddington in Peru",
         year: "2025",
-        poster: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSIn8Lanzp07svwrPnMaDLSJgiOcPcbwxW6UQ&s"
+        poster: "https://preview.redd.it/new-poster-for-paddington-in-peru-v0-wiaho7f0bqtd1.jpeg?auto=webp&s=1c2a24446d5be89131c0b41cd43671dbc2a0373c"
     }
 ];
 
